@@ -11,8 +11,9 @@ import { QRScanner } from '@/components/QRScanner';
 import { FileUploadScanner } from '@/components/FileUploadScanner';
 import { parseQRCode, type StudentData } from '@/lib/qrCodeParser';
 import { toast } from 'sonner';
-import { QrCode, Upload, Users, Calendar, CheckCircle, Trash2, Search, Edit, Save, X } from 'lucide-react';
+import { QrCode, Upload, Users, Calendar, CheckCircle, Trash2, Search, Edit, Save, X, Download, FileSpreadsheet } from 'lucide-react';
 import QRCodeLib from 'qrcode';
+import * as XLSX from 'xlsx';
 
 interface AttendanceRecord {
   studentId: string;
@@ -119,7 +120,7 @@ const Index = () => {
   const handleScanSuccess = (decodedText: string) => {
     let studentData: StudentData | null = null;
 
-    // Check if registered
+    // Check if registered by exact match
     for (const id in registeredQRCodes) {
       if (registeredQRCodes[id].rawData === decodedText) {
         studentData = registeredQRCodes[id];
@@ -127,7 +128,7 @@ const Index = () => {
       }
     }
 
-    // Try to parse
+    // Try to parse if not found
     if (!studentData) {
       studentData = parseQRCode(decodedText, currentSection);
     }
@@ -142,11 +143,25 @@ const Index = () => {
       studentData = registeredQRCodes[studentData.id];
     }
 
+    // AUTOMATIC SECTION SWITCHING - based sa registered section ng student
+    if (studentData && studentData.section) {
+      if (currentSection !== studentData.section) {
+        setCurrentSection(studentData.section);
+        toast.info(`Automatically switched to ${studentData.section}`, {
+          duration: 2000,
+        });
+      }
+    }
+
     const success = addAttendanceRecord(studentData.id, studentData.name, studentData.section);
     if (success) {
-      toast.success(`Attendance marked for ${studentData.name}!`);
+      toast.success(`✓ Attendance marked for ${studentData.name}!`, {
+        description: `Section: ${studentData.section}`
+      });
     } else {
-      toast.warning(`${studentData.name} already marked attendance today`);
+      toast.warning(`${studentData.name} already marked attendance today`, {
+        description: `Section: ${studentData.section}`
+      });
     }
   };
 
@@ -278,6 +293,131 @@ const Index = () => {
              qr.id.toLowerCase().includes(registrationSearchQuery.toLowerCase()) ||
              qr.section.toLowerCase().includes(registrationSearchQuery.toLowerCase());
     });
+  };
+
+  // EXCEL EXPORT FUNCTIONS - Based sa original code
+  const exportToExcel = (day: string) => {
+    const records = getAttendanceForDay(day);
+    
+    if (records.length === 0) {
+      toast.error('No attendance records to export');
+      return;
+    }
+
+    // Prepare data for Excel
+    const excelData = records.map((record, index) => ({
+      'No.': index + 1,
+      'Student ID': record.studentId,
+      'Student Name': record.studentName,
+      'Section': record.section,
+      'Date': record.date,
+      'Time': record.time
+    }));
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(excelData);
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 5 },  // No.
+      { wch: 15 }, // Student ID
+      { wch: 25 }, // Student Name
+      { wch: 15 }, // Section
+      { wch: 15 }, // Date
+      { wch: 12 }  // Time
+    ];
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, day);
+
+    // Generate filename
+    const filename = `Attendance_${day}_${currentMonth}_${currentYear}_${currentSection}.xlsx`;
+
+    // Save file
+    XLSX.writeFile(wb, filename);
+
+    toast.success(`Excel file downloaded: ${filename}`);
+  };
+
+  const exportAllDaysToExcel = () => {
+    const wb = XLSX.utils.book_new();
+    let hasData = false;
+
+    DAYS.forEach(day => {
+      const records = getAttendanceForDay(day);
+      
+      if (records.length > 0) {
+        hasData = true;
+        
+        const excelData = records.map((record, index) => ({
+          'No.': index + 1,
+          'Student ID': record.studentId,
+          'Student Name': record.studentName,
+          'Section': record.section,
+          'Date': record.date,
+          'Time': record.time
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(excelData);
+        
+        ws['!cols'] = [
+          { wch: 5 },
+          { wch: 15 },
+          { wch: 25 },
+          { wch: 15 },
+          { wch: 15 },
+          { wch: 12 }
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws, day);
+      }
+    });
+
+    if (!hasData) {
+      toast.error('No attendance records to export');
+      return;
+    }
+
+    const filename = `Attendance_AllDays_${currentMonth}_${currentYear}_${currentSection}.xlsx`;
+    XLSX.writeFile(wb, filename);
+
+    toast.success(`Excel file downloaded: ${filename}`);
+  };
+
+  const exportRegisteredQRCodes = () => {
+    const qrCodes = getFilteredRegisteredQRCodes();
+    
+    if (qrCodes.length === 0) {
+      toast.error('No registered QR codes to export');
+      return;
+    }
+
+    const excelData = qrCodes.map((qr, index) => ({
+      'No.': index + 1,
+      'Student ID': qr.id,
+      'Student Name': qr.name,
+      'Section': qr.section,
+      'Registered Date': new Date(qr.registeredAt).toLocaleString()
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(excelData);
+
+    ws['!cols'] = [
+      { wch: 5 },
+      { wch: 15 },
+      { wch: 25 },
+      { wch: 15 },
+      { wch: 20 }
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Registered QR Codes');
+
+    const filename = `RegisteredQRCodes_${new Date().toLocaleDateString()}.xlsx`;
+    XLSX.writeFile(wb, filename);
+
+    toast.success(`Excel file downloaded: ${filename}`);
   };
 
   return (
@@ -452,9 +592,13 @@ const Index = () => {
             {Object.keys(registeredQRCodes).length > 0 && (
               <Card className="border-border shadow-elegant">
                 <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>Registered QR Codes ({Object.keys(registeredQRCodes).length})</span>
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Registered QR Codes ({Object.keys(registeredQRCodes).length})</CardTitle>
+                    <Button onClick={exportRegisteredQRCodes} variant="outline" size="sm">
+                      <Download className="w-4 h-4 mr-2" />
+                      Export to Excel
+                    </Button>
+                  </div>
                   <div className="space-y-2 mt-4">
                     <Label>Search</Label>
                     <div className="relative">
@@ -523,8 +667,22 @@ const Index = () => {
           <TabsContent value="records" className="space-y-6">
             <Card className="border-border shadow-elegant">
               <CardHeader>
-                <CardTitle>Attendance Records</CardTitle>
-                <CardDescription>View attendance history</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Attendance Records</CardTitle>
+                    <CardDescription>View and export attendance history</CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={() => exportToExcel(currentDay)} variant="outline" size="sm">
+                      <Download className="w-4 h-4 mr-2" />
+                      Export {currentDay}
+                    </Button>
+                    <Button onClick={exportAllDaysToExcel} size="sm">
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
+                      Export All Days
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
