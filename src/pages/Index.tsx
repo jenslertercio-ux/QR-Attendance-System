@@ -6,11 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { QRScanner } from '@/components/QRScanner';
 import { FileUploadScanner } from '@/components/FileUploadScanner';
 import { parseQRCode, type StudentData } from '@/lib/qrCodeParser';
 import { toast } from 'sonner';
-import { QrCode, Upload, Users, Calendar, CheckCircle, Trash2, Search } from 'lucide-react';
+import { QrCode, Upload, Users, Calendar, CheckCircle, Trash2, Search, Edit, Save, X } from 'lucide-react';
 import QRCodeLib from 'qrcode';
 
 interface AttendanceRecord {
@@ -43,11 +44,16 @@ const Index = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date().toLocaleDateString('en-US', { month: 'long' }));
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [searchQuery, setSearchQuery] = useState('');
+  const [registrationSearchQuery, setRegistrationSearchQuery] = useState('');
   
   // QR Generator state
   const [studentId, setStudentId] = useState('');
   const [studentName, setStudentName] = useState('');
   const [qrSection, setQrSection] = useState('WMAD 1-1');
+
+  // Edit modal state
+  const [editingQR, setEditingQR] = useState<RegisteredQRCode | null>(null);
+  const [editForm, setEditForm] = useState({ id: '', name: '', section: '' });
 
   useEffect(() => {
     loadAttendanceData();
@@ -229,6 +235,51 @@ const Index = () => {
     toast.success('QR code unregistered');
   };
 
+  const openEditModal = (qr: RegisteredQRCode) => {
+    setEditingQR(qr);
+    setEditForm({ id: qr.id, name: qr.name, section: qr.section });
+  };
+
+  const closeEditModal = () => {
+    setEditingQR(null);
+    setEditForm({ id: '', name: '', section: '' });
+  };
+
+  const saveEdit = () => {
+    if (!editingQR || !editForm.id || !editForm.name) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    const newRegistered = { ...registeredQRCodes };
+    
+    // If ID changed, we need to delete the old key and create a new one
+    if (editForm.id !== editingQR.id) {
+      delete newRegistered[editingQR.id];
+    }
+
+    newRegistered[editForm.id] = {
+      ...editingQR,
+      id: editForm.id,
+      name: editForm.name,
+      section: editForm.section,
+      rawData: `${editForm.id}:${editForm.name}:${editForm.section}`
+    };
+
+    saveRegisteredQRCodes(newRegistered);
+    toast.success('QR code updated successfully');
+    closeEditModal();
+  };
+
+  const getFilteredRegisteredQRCodes = () => {
+    return Object.values(registeredQRCodes).filter(qr => {
+      if (!registrationSearchQuery) return true;
+      return qr.name.toLowerCase().includes(registrationSearchQuery.toLowerCase()) ||
+             qr.id.toLowerCase().includes(registrationSearchQuery.toLowerCase()) ||
+             qr.section.toLowerCase().includes(registrationSearchQuery.toLowerCase());
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -401,25 +452,67 @@ const Index = () => {
             {Object.keys(registeredQRCodes).length > 0 && (
               <Card className="border-border shadow-elegant">
                 <CardHeader>
-                  <CardTitle>Registered QR Codes ({Object.keys(registeredQRCodes).length})</CardTitle>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Registered QR Codes ({Object.keys(registeredQRCodes).length})</span>
+                  </CardTitle>
+                  <div className="space-y-2 mt-4">
+                    <Label>Search</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        className="pl-9"
+                        placeholder="Search by name, ID, or section..."
+                        value={registrationSearchQuery}
+                        onChange={(e) => setRegistrationSearchQuery(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {Object.values(registeredQRCodes).map((qr) => (
-                      <div key={qr.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                        <div>
-                          <p className="font-semibold">{qr.name}</p>
-                          <p className="text-sm text-muted-foreground">ID: {qr.id} • {qr.section}</p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteRegisteredQR(qr.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                    {getFilteredRegisteredQRCodes().length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                        <p>No registered QR codes found matching "{registrationSearchQuery}"</p>
                       </div>
-                    ))}
+                    ) : (
+                      getFilteredRegisteredQRCodes().map((qr) => (
+                        <div key={qr.id} className="flex items-center justify-between p-4 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors">
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary text-primary-foreground font-bold text-lg">
+                              {qr.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-lg">{qr.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                ID: {qr.id} • {qr.section}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Registered: {new Date(qr.registeredAt).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openEditModal(qr)}
+                              title="Edit QR Code"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => deleteRegisteredQR(qr.id)}
+                              title="Delete QR Code"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -518,6 +611,61 @@ const Index = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Edit QR Code Modal */}
+      <Dialog open={editingQR !== null} onOpenChange={(open) => !open && closeEditModal()}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Registered QR Code</DialogTitle>
+            <DialogDescription>
+              Update the student information for this registered QR code
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-id">Student ID *</Label>
+              <Input
+                id="edit-id"
+                value={editForm.id}
+                onChange={(e) => setEditForm({ ...editForm, id: e.target.value })}
+                placeholder="Enter student ID"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Student Name *</Label>
+              <Input
+                id="edit-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                placeholder="Enter student name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-section">Section</Label>
+              <Select value={editForm.section} onValueChange={(value) => setEditForm({ ...editForm, section: value })}>
+                <SelectTrigger id="edit-section">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SECTIONS.map(section => (
+                    <SelectItem key={section} value={section}>{section}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeEditModal}>
+              <X className="w-4 h-4 mr-2" />
+              Cancel
+            </Button>
+            <Button onClick={saveEdit}>
+              <Save className="w-4 h-4 mr-2" />
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
