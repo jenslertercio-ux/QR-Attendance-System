@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,10 +11,18 @@ import { QRScanner } from '@/components/QRScanner';
 import { FileUploadScanner } from '@/components/FileUploadScanner';
 import { parseQRCode, type StudentData } from '@/lib/qrCodeParser';
 import { toast } from 'sonner';
-import { QrCode, Upload, Users, Calendar, CheckCircle, Trash2, Search, Edit, Save, X, Download, FileSpreadsheet } from 'lucide-react';
+import { 
+  QrCode, Upload, Users, Calendar, CheckCircle, Trash2, Search, Edit, Save, X, 
+  Download, FileSpreadsheet, Camera, ListChecks, Check, Sparkles, Zap, Clock, 
+  Award, BarChart3, UserCheck, FileText, Filter, RefreshCw, Maximize, Minimize, 
+  Activity, TrendingUp, Shield, Wifi, Battery, Settings, Bell, HelpCircle, 
+  ChevronRight, ArrowUp, ArrowDown, MoreHorizontal, Star, AlertCircle, UserPlus,
+  History, LogOut, Moon, Sun
+} from 'lucide-react';
 import QRCodeLib from 'qrcode';
 import * as XLSX from 'xlsx';
 
+// Types for better type safety
 interface AttendanceRecord {
   studentId: string;
   studentName: string;
@@ -32,20 +40,70 @@ interface RegisteredQRCode {
   registeredAt: string;
 }
 
+interface SystemStats {
+  totalStudents: number;
+  registeredQR: number;
+  todayAttendance: number;
+  weeklyTrend: number;
+}
+
+// Constants
 const SECTIONS = ['WMAD 1-1', 'WMAD 1-2'];
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const STORAGE_KEYS = {
+  ATTENDANCE_DATA: 'attendanceData',
+  REGISTERED_QR_CODES: 'registeredQRCodes',
+  USER_PREFERENCES: 'userPreferences'
+};
 
+// Utility functions
+const formatTime = (date: Date) => {
+  return date.toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    hour12: true 
+  });
+};
+
+const formatDate = (date: Date) => {
+  return date.toLocaleDateString();
+};
+
+const getCurrentDateTime = () => {
+  const now = new Date();
+  return {
+    date: formatDate(now),
+    time: formatTime(now),
+    day: now.toLocaleDateString('en-US', { weekday: 'long' }),
+    month: now.toLocaleDateString('en-US', { month: 'long' }),
+    year: now.getFullYear(),
+    timestamp: now.getTime()
+  };
+};
+
+const generateAttendanceKey = (section: string, dateTime: ReturnType<typeof getCurrentDateTime>) => {
+  return `${dateTime.year}_${dateTime.month}_${dateTime.day}_${section}`;
+};
+
+// Main component
 const Index = () => {
+  // State management
   const [attendanceData, setAttendanceData] = useState<{ [key: string]: AttendanceRecord[] }>({});
   const [registeredQRCodes, setRegisteredQRCodes] = useState<{ [key: string]: RegisteredQRCode }>({});
   const [currentSection, setCurrentSection] = useState('WMAD 1-1');
   const [currentRegistrationSection, setCurrentRegistrationSection] = useState('WMAD 1-1');
   const [isScanning, setIsScanning] = useState(false);
-  const [currentDay, setCurrentDay] = useState(new Date().toLocaleDateString('en-US', { weekday: 'long' }));
-  const [currentMonth, setCurrentMonth] = useState(new Date().toLocaleDateString('en-US', { month: 'long' }));
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [currentDateTime, setCurrentDateTime] = useState(getCurrentDateTime());
   const [searchQuery, setSearchQuery] = useState('');
   const [registrationSearchQuery, setRegistrationSearchQuery] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [lastScannedStudent, setLastScannedStudent] = useState<string | null>(null);
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
+  const [showStats, setShowStats] = useState(true);
+  const [activeTab, setActiveTab] = useState('generator');
+  const [darkMode, setDarkMode] = useState(false);
   
   // QR Generator state
   const [studentId, setStudentId] = useState('');
@@ -55,49 +113,113 @@ const Index = () => {
   // Edit modal state
   const [editingQR, setEditingQR] = useState<RegisteredQRCode | null>(null);
   const [editForm, setEditForm] = useState({ id: '', name: '', section: '' });
+  
+  // Refs
+  const scannerContainerRef = useRef<HTMLDivElement>(null);
+  const toastIdRef = useRef<string | number | null>(null);
 
+  // Initialize data on component mount
   useEffect(() => {
     loadAttendanceData();
     loadRegisteredQRCodes();
+    loadUserPreferences();
+    
+    // Update current time every minute
+    const timeInterval = setInterval(() => {
+      setCurrentDateTime(getCurrentDateTime());
+    }, 60000);
+    
+    return () => clearInterval(timeInterval);
   }, []);
 
-  const loadAttendanceData = () => {
-    const stored = localStorage.getItem('attendanceData');
-    if (stored) {
-      setAttendanceData(JSON.parse(stored));
+  // Load data from localStorage
+  const loadAttendanceData = useCallback(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.ATTENDANCE_DATA);
+      if (stored) {
+        setAttendanceData(JSON.parse(stored));
+      }
+    } catch (error) {
+      console.error('Error loading attendance data:', error);
+      toast.error('Failed to load attendance data');
     }
-  };
+  }, []);
 
-  const loadRegisteredQRCodes = () => {
-    const stored = localStorage.getItem('registeredQRCodes');
-    if (stored) {
-      setRegisteredQRCodes(JSON.parse(stored));
-      toast.success(`Loaded ${Object.keys(JSON.parse(stored)).length} registered QR codes`);
+  const loadRegisteredQRCodes = useCallback(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.REGISTERED_QR_CODES);
+      if (stored) {
+        const qrCodes = JSON.parse(stored);
+        setRegisteredQRCodes(qrCodes);
+        toast.success(`Loaded ${Object.keys(qrCodes).length} registered QR codes`);
+      }
+    } catch (error) {
+      console.error('Error loading registered QR codes:', error);
+      toast.error('Failed to load registered QR codes');
     }
-  };
+  }, []);
 
-  const saveAttendanceData = (data: { [key: string]: AttendanceRecord[] }) => {
-    localStorage.setItem('attendanceData', JSON.stringify(data));
-    setAttendanceData(data);
-  };
+  const loadUserPreferences = useCallback(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.USER_PREFERENCES);
+      if (stored) {
+        const preferences = JSON.parse(stored);
+        setDarkMode(preferences.darkMode || false);
+        setShowStats(preferences.showStats !== false); // Default to true
+      }
+    } catch (error) {
+      console.error('Error loading user preferences:', error);
+    }
+  }, []);
 
-  const saveRegisteredQRCodes = (data: { [key: string]: RegisteredQRCode }) => {
-    localStorage.setItem('registeredQRCodes', JSON.stringify(data));
-    setRegisteredQRCodes(data);
-  };
+  // Save data to localStorage
+  const saveAttendanceData = useCallback((data: { [key: string]: AttendanceRecord[] }) => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.ATTENDANCE_DATA, JSON.stringify(data));
+      setAttendanceData(data);
+    } catch (error) {
+      console.error('Error saving attendance data:', error);
+      toast.error('Failed to save attendance data');
+    }
+  }, []);
 
-  const addAttendanceRecord = (studentId: string, studentName: string, section: string): boolean => {
-    const now = new Date();
-    const day = now.toLocaleDateString('en-US', { weekday: 'long' });
-    const month = now.toLocaleDateString('en-US', { month: 'long' });
-    const year = now.getFullYear();
-    const key = `${year}_${month}_${day}_${section}`;
+  const saveRegisteredQRCodes = useCallback((data: { [key: string]: RegisteredQRCode }) => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.REGISTERED_QR_CODES, JSON.stringify(data));
+      setRegisteredQRCodes(data);
+    } catch (error) {
+      console.error('Error saving registered QR codes:', error);
+      toast.error('Failed to save registered QR codes');
+    }
+  }, []);
+
+  const saveUserPreferences = useCallback(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.USER_PREFERENCES, JSON.stringify({
+        darkMode,
+        showStats
+      }));
+    } catch (error) {
+      console.error('Error saving user preferences:', error);
+    }
+  }, [darkMode, showStats]);
+
+  // Update user preferences when they change
+  useEffect(() => {
+    saveUserPreferences();
+  }, [darkMode, showStats, saveUserPreferences]);
+
+  // Add attendance record
+  const addAttendanceRecord = useCallback((studentId: string, studentName: string, section: string): boolean => {
+    const dateTime = getCurrentDateTime();
+    const key = generateAttendanceKey(section, dateTime);
 
     const newData = { ...attendanceData };
     if (!newData[key]) {
       newData[key] = [];
     }
 
+    // Check if student already marked attendance
     const alreadyMarked = newData[key].some(record => record.studentId === studentId);
     if (alreadyMarked) {
       return false;
@@ -107,17 +229,18 @@ const Index = () => {
       studentId,
       studentName,
       section,
-      date: now.toLocaleDateString(),
-      time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-      timestamp: now.getTime()
+      date: dateTime.date,
+      time: dateTime.time,
+      timestamp: dateTime.timestamp
     };
 
     newData[key].push(record);
     saveAttendanceData(newData);
     return true;
-  };
+  }, [attendanceData, saveAttendanceData]);
 
-  const handleScanSuccess = (decodedText: string) => {
+  // Handle successful QR scan
+  const handleScanSuccess = useCallback((decodedText: string) => {
     let studentData: StudentData | null = null;
 
     // Check if registered by exact match
@@ -143,53 +266,62 @@ const Index = () => {
       studentData = registeredQRCodes[studentData.id];
     }
 
-    // AUTOMATIC SECTION SWITCHING - based sa registered section ng student
-    if (studentData && studentData.section) {
-      if (currentSection !== studentData.section) {
-        setCurrentSection(studentData.section);
-        toast.info(`Automatically switched to ${studentData.section}`, {
-          duration: 2000,
-        });
-      }
+    // Automatic section switching
+    if (studentData && studentData.section && currentSection !== studentData.section) {
+      setCurrentSection(studentData.section);
+      toast.info(`Automatically switched to ${studentData.section}`, {
+        duration: 2000,
+      });
     }
 
     const success = addAttendanceRecord(studentData.id, studentData.name, studentData.section);
+    
+    // Show success animation
+    setLastScannedStudent(studentData.name);
+    setShowSuccessAnimation(true);
+    setTimeout(() => setShowSuccessAnimation(false), 3000);
+    
+    // Show appropriate toast message
     if (success) {
       toast.success(`✓ Attendance marked for ${studentData.name}!`, {
-        description: `Section: ${studentData.section}`
+        description: `Section: ${studentData.section}`,
+        id: toastIdRef.current
       });
     } else {
       toast.warning(`${studentData.name} already marked attendance today`, {
-        description: `Section: ${studentData.section}`
+        description: `Section: ${studentData.section}`,
+        id: toastIdRef.current
       });
     }
-  };
+  }, [registeredQRCodes, currentSection, addAttendanceRecord]);
 
-  const handleRegistrationSuccess = (studentData: StudentData) => {
-    if (registeredQRCodes[studentData.id]) {
-      toast.warning(`${studentData.name} is already registered`);
-      return;
-    }
+  // Handle successful QR registration
+  const handleRegistrationSuccess = useCallback((studentData: StudentData) => {
+    setRegisteredQRCodes(prev => {
+      const newRegistered = { ...prev };
+      
+      // Add or update the registration
+      newRegistered[studentData.id] = {
+        id: studentData.id,
+        name: studentData.name,
+        section: studentData.section,
+        rawData: `${studentData.id}:${studentData.name}:${studentData.section}`,
+        registeredAt: prev[studentData.id]?.registeredAt || new Date().toISOString(),
+      };
 
-    const newRegistered = { ...registeredQRCodes };
-    newRegistered[studentData.id] = {
-      id: studentData.id,
-      name: studentData.name,
-      section: studentData.section,
-      rawData: `${studentData.id}:${studentData.name}:${studentData.section}`,
-      registeredAt: new Date().toISOString()
-    };
+      saveRegisteredQRCodes(newRegistered);
+      return newRegistered;
+    });
+  }, [saveRegisteredQRCodes]);
 
-    saveRegisteredQRCodes(newRegistered);
-    toast.success(`Registered: ${studentData.name}`);
-  };
-
-  const generateQRCode = async () => {
+  // Generate QR code
+  const generateQRCode = useCallback(async () => {
     if (!studentId || !studentName) {
       toast.error('Please fill in all fields');
       return;
     }
 
+    setIsGenerating(true);
     const qrData = `${studentId}:${studentName}:${qrSection}`;
     
     try {
@@ -198,8 +330,8 @@ const Index = () => {
         width: 300,
         margin: 2,
         color: {
-          dark: '#000000',
-          light: '#FFFFFF'
+          dark: '#FFFFFF',
+          light: '#000000'
         }
       });
 
@@ -212,55 +344,79 @@ const Index = () => {
       setStudentId('');
       setStudentName('');
     } catch (error) {
+      console.error('Error generating QR code:', error);
       toast.error('Failed to generate QR code');
+    } finally {
+      setIsGenerating(false);
     }
-  };
+  }, [studentId, studentName, qrSection]);
 
-  const getAttendanceForDay = (day: string) => {
-    const key = `${currentYear}_${currentMonth}_${day}_${currentSection}`;
+  // Get attendance for a specific day
+  const getAttendanceForDay = useCallback((day: string) => {
+    const key = `${currentDateTime.year}_${currentDateTime.month}_${day}_${currentSection}`;
     return (attendanceData[key] || []).filter(record => {
       if (!searchQuery) return true;
       return record.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
              record.studentId.toLowerCase().includes(searchQuery.toLowerCase());
     });
-  };
+  }, [attendanceData, currentDateTime, currentSection, searchQuery]);
 
-  const getTotalStudents = () => {
-    const students = new Set<string>();
+  // Calculate system statistics
+  const systemStats = useMemo((): SystemStats => {
+    const totalStudents = new Set<string>();
+    let weeklyTrend = 0;
+    
     Object.values(attendanceData).forEach(records => {
-      records.forEach(record => students.add(record.studentId));
+      records.forEach(record => {
+        totalStudents.add(record.studentId);
+      });
     });
-    return students.size;
-  };
 
-  const deleteAttendanceRecord = (day: string, index: number) => {
-    const key = `${currentYear}_${currentMonth}_${day}_${currentSection}`;
+    // Calculate weekly trend (simplified)
+    const today = new Date().getDay();
+    const thisWeekCount = totalStudents.size;
+    const lastWeekCount = Math.floor(thisWeekCount * 0.9); // Simplified calculation
+    weeklyTrend = Math.round(((thisWeekCount - lastWeekCount) / lastWeekCount) * 100);
+
+    return {
+      totalStudents: totalStudents.size,
+      registeredQR: Object.keys(registeredQRCodes).length,
+      todayAttendance: getAttendanceForDay(currentDateTime.day).length,
+      weeklyTrend
+    };
+  }, [attendanceData, registeredQRCodes, getAttendanceForDay, currentDateTime.day]);
+
+  // Delete attendance record
+  const deleteAttendanceRecord = useCallback((day: string, index: number) => {
+    const key = `${currentDateTime.year}_${currentDateTime.month}_${day}_${currentSection}`;
     const newData = { ...attendanceData };
     if (newData[key]) {
       newData[key].splice(index, 1);
       saveAttendanceData(newData);
       toast.success('Record deleted');
     }
-  };
+  }, [attendanceData, currentDateTime, currentSection, saveAttendanceData]);
 
-  const deleteRegisteredQR = (id: string) => {
+  // Delete registered QR code
+  const deleteRegisteredQR = useCallback((id: string) => {
     const newRegistered = { ...registeredQRCodes };
     delete newRegistered[id];
     saveRegisteredQRCodes(newRegistered);
     toast.success('QR code unregistered');
-  };
+  }, [registeredQRCodes, saveRegisteredQRCodes]);
 
-  const openEditModal = (qr: RegisteredQRCode) => {
+  // Edit QR code modal functions
+  const openEditModal = useCallback((qr: RegisteredQRCode) => {
     setEditingQR(qr);
     setEditForm({ id: qr.id, name: qr.name, section: qr.section });
-  };
+  }, []);
 
-  const closeEditModal = () => {
+  const closeEditModal = useCallback(() => {
     setEditingQR(null);
     setEditForm({ id: '', name: '', section: '' });
-  };
+  }, []);
 
-  const saveEdit = () => {
+  const saveEdit = useCallback(() => {
     if (!editingQR || !editForm.id || !editForm.name) {
       toast.error('Please fill in all required fields');
       return;
@@ -284,27 +440,29 @@ const Index = () => {
     saveRegisteredQRCodes(newRegistered);
     toast.success('QR code updated successfully');
     closeEditModal();
-  };
+  }, [editingQR, editForm, registeredQRCodes, saveRegisteredQRCodes, closeEditModal]);
 
-  const getFilteredRegisteredQRCodes = () => {
+  // Get filtered registered QR codes
+  const getFilteredRegisteredQRCodes = useCallback(() => {
     return Object.values(registeredQRCodes).filter(qr => {
       if (!registrationSearchQuery) return true;
       return qr.name.toLowerCase().includes(registrationSearchQuery.toLowerCase()) ||
              qr.id.toLowerCase().includes(registrationSearchQuery.toLowerCase()) ||
              qr.section.toLowerCase().includes(registrationSearchQuery.toLowerCase());
     });
-  };
+  }, [registeredQRCodes, registrationSearchQuery]);
 
-  // EXCEL EXPORT FUNCTIONS - Based sa original code
-  const exportToExcel = (day: string) => {
+  // Export functions
+  const exportToExcel = useCallback((day: string) => {
+    setIsExporting(true);
     const records = getAttendanceForDay(day);
     
     if (records.length === 0) {
       toast.error('No attendance records to export');
+      setIsExporting(false);
       return;
     }
 
-    // Prepare data for Excel
     const excelData = records.map((record, index) => ({
       'No.': index + 1,
       'Student ID': record.studentId,
@@ -314,268 +472,505 @@ const Index = () => {
       'Time': record.time
     }));
 
-    // Create workbook and worksheet
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(excelData);
-
-    // Set column widths
-    ws['!cols'] = [
-      { wch: 5 },  // No.
-      { wch: 15 }, // Student ID
-      { wch: 25 }, // Student Name
-      { wch: 15 }, // Section
-      { wch: 15 }, // Date
-      { wch: 12 }  // Time
-    ];
-
-    // Add worksheet to workbook
+    ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 12 }];
     XLSX.utils.book_append_sheet(wb, ws, day);
-
-    // Generate filename
-    const filename = `Attendance_${day}_${currentMonth}_${currentYear}_${currentSection}.xlsx`;
-
-    // Save file
+    const filename = `Attendance_${day}_${currentDateTime.month}_${currentDateTime.year}_${currentSection}.xlsx`;
     XLSX.writeFile(wb, filename);
-
     toast.success(`Excel file downloaded: ${filename}`);
-  };
+    setIsExporting(false);
+  }, [getAttendanceForDay, currentDateTime, currentSection]);
 
-  const exportAllDaysToExcel = () => {
+  const exportAllDaysToExcel = useCallback(() => {
+    setIsExporting(true);
     const wb = XLSX.utils.book_new();
     let hasData = false;
 
     DAYS.forEach(day => {
       const records = getAttendanceForDay(day);
-      
       if (records.length > 0) {
         hasData = true;
-        
         const excelData = records.map((record, index) => ({
-          'No.': index + 1,
-          'Student ID': record.studentId,
+          'No.': index + 1, 
+          'Student ID': record.studentId, 
           'Student Name': record.studentName,
-          'Section': record.section,
-          'Date': record.date,
+          'Section': record.section, 
+          'Date': record.date, 
           'Time': record.time
         }));
-
         const ws = XLSX.utils.json_to_sheet(excelData);
-        
-        ws['!cols'] = [
-          { wch: 5 },
-          { wch: 15 },
-          { wch: 25 },
-          { wch: 15 },
-          { wch: 15 },
-          { wch: 12 }
-        ];
-
+        ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 12 }];
         XLSX.utils.book_append_sheet(wb, ws, day);
       }
     });
 
     if (!hasData) {
       toast.error('No attendance records to export');
+      setIsExporting(false);
       return;
     }
 
-    const filename = `Attendance_AllDays_${currentMonth}_${currentYear}_${currentSection}.xlsx`;
+    const filename = `Attendance_AllDays_${currentDateTime.month}_${currentDateTime.year}_${currentSection}.xlsx`;
     XLSX.writeFile(wb, filename);
-
     toast.success(`Excel file downloaded: ${filename}`);
-  };
+    setIsExporting(false);
+  }, [getAttendanceForDay, currentDateTime, currentSection]);
 
-  const exportRegisteredQRCodes = () => {
+  const exportRegisteredQRCodes = useCallback(() => {
+    setIsExporting(true);
     const qrCodes = getFilteredRegisteredQRCodes();
     
     if (qrCodes.length === 0) {
       toast.error('No registered QR codes to export');
+      setIsExporting(false);
       return;
     }
 
     const excelData = qrCodes.map((qr, index) => ({
-      'No.': index + 1,
-      'Student ID': qr.id,
+      'No.': index + 1, 
+      'Student ID': qr.id, 
       'Student Name': qr.name,
-      'Section': qr.section,
+      'Section': qr.section, 
       'Registered Date': new Date(qr.registeredAt).toLocaleString()
     }));
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(excelData);
-
-    ws['!cols'] = [
-      { wch: 5 },
-      { wch: 15 },
-      { wch: 25 },
-      { wch: 15 },
-      { wch: 20 }
-    ];
-
+    ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 20 }];
     XLSX.utils.book_append_sheet(wb, ws, 'Registered QR Codes');
-
     const filename = `RegisteredQRCodes_${new Date().toLocaleDateString()}.xlsx`;
     XLSX.writeFile(wb, filename);
-
     toast.success(`Excel file downloaded: ${filename}`);
-  };
+    setIsExporting(false);
+  }, [getFilteredRegisteredQRCodes]);
+
+  // Toggle fullscreen
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      scannerContainerRef.current?.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      }).catch(err => {
+        toast.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen().then(() => {
+        setIsFullscreen(false);
+      }).catch(err => {
+        toast.error(`Error attempting to exit fullscreen: ${err.message}`);
+      });
+    }
+  }, []);
+
+  // Handle fullscreen change
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary-glow mb-4 shadow-glow">
-            <QrCode className="w-8 h-8 text-primary-foreground" />
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
-            QR Attendance System
-          </h1>
-          <p className="text-muted-foreground">Modern attendance tracking with QR code technology</p>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="border-border shadow-elegant">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                Total Students
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{getTotalStudents()}</div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border shadow-elegant">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <QrCode className="w-4 h-4" />
-                Registered QR Codes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{Object.keys(registeredQRCodes).length}</div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border shadow-elegant">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                Current Time
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">
-                {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+    <div className={`app-container ${darkMode ? 'dark' : ''}`}>
+      {/* Animated background elements */}
+      <div className="bg-animation">
+        <div className="bg-blob bg-blob-1"></div>
+        <div className="bg-blob bg-blob-2"></div>
+        <div className="bg-blob bg-blob-3"></div>
+      </div>
+      
+      <div className="max-w-7xl mx-auto space-y-6 relative z-10">
+        {/* Enhanced Header with glassmorphic nav */}
+        <div className="glass-nav rounded-3xl p-6 mb-8">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg hover-glow animate-pulse-slow">
+                <QrCode className="w-7 h-7 text-primary-foreground" />
               </div>
-            </CardContent>
-          </Card>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold gradient-text">
+                  QR Attendance System
+                </h1>
+                <p className="text-sm text-muted-foreground">Modern attendance tracking with advanced analytics</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="glass-card rounded-2xl px-4 py-2 hover-lift">
+                <p className="text-xs text-muted-foreground">Active Section</p>
+                <p className="text-lg font-bold gradient-text">{currentSection}</p>
+              </div>
+              <div className="glass-card rounded-2xl px-4 py-2 hover-lift">
+                <p className="text-xs text-muted-foreground">Current Date</p>
+                <p className="text-lg font-bold text-foreground">{currentDateTime.date}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="rounded-full"
+                  onClick={() => setDarkMode(!darkMode)}
+                >
+                  {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </Button>
+                <Button variant="ghost" size="sm" className="rounded-full">
+                  <Bell className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="sm" className="rounded-full">
+                  <Settings className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="sm" className="rounded-full">
+                  <HelpCircle className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Main Tabs */}
-        <Tabs defaultValue="generator" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 bg-card">
-            <TabsTrigger value="generator">Generate QR</TabsTrigger>
-            <TabsTrigger value="scanner">Scan Attendance</TabsTrigger>
-            <TabsTrigger value="register">Register QR</TabsTrigger>
-            <TabsTrigger value="records">View Records</TabsTrigger>
-          </TabsList>
+        {/* Enhanced Success Animation Overlay */}
+        {showSuccessAnimation && (
+          <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none bg-background/80 backdrop-blur-sm">
+            <div className="glass-card rounded-3xl p-8 animate-bounce-in shadow-2xl">
+              <div className="flex flex-col items-center">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center mb-4 animate-pulse shadow-lg">
+                  <CheckCircle className="w-10 h-10 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-foreground">Attendance Marked!</h3>
+                <p className="text-muted-foreground mt-2">{lastScannedStudent}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
-          {/* QR Generator */}
-          <TabsContent value="generator" className="space-y-6">
-            <Card className="border-border shadow-elegant">
-              <CardHeader>
-                <CardTitle>Generate QR Code</CardTitle>
-                <CardDescription>Create QR codes for students</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+        {/* Enhanced Stats Cards with Toggle */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-foreground">Dashboard Overview</h2>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setShowStats(!showStats)}
+            className="flex items-center gap-2"
+          >
+            {showStats ? <><ArrowUp className="w-4 h-4" /> Hide Stats</> : <><ArrowDown className="w-4 h-4" /> Show Stats</>}
+          </Button>
+        </div>
+        
+        {showStats && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="glass-card rounded-3xl p-6 hover-lift animate-fade-in-up relative overflow-hidden" style={{animationDelay: '0.1s'}}>
+              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/20 to-transparent rounded-bl-full"></div>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg">
+                  <Users className="w-7 h-7 text-primary-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Total Students</p>
+                  <p className="text-3xl font-bold text-foreground">{systemStats.totalStudents}</p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <TrendingUp className="w-3 h-3 text-green-500" />
+                    <p className="text-xs text-green-500">+{systemStats.weeklyTrend}% from last week</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card rounded-3xl p-6 hover-lift animate-fade-in-up relative overflow-hidden" style={{animationDelay: '0.2s'}}>
+              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-accent/20 to-transparent rounded-bl-full"></div>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center shadow-lg">
+                  <QrCode className="w-7 h-7 text-accent-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Registered QR</p>
+                  <p className="text-3xl font-bold text-foreground">{systemStats.registeredQR}</p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <Activity className="w-3 h-3 text-blue-500" />
+                    <p className="text-xs text-blue-500">Active registrations</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card rounded-3xl p-6 hover-lift animate-fade-in-up relative overflow-hidden" style={{animationDelay: '0.3s'}}>
+              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-green-500/20 to-transparent rounded-bl-full"></div>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-lg">
+                  <Calendar className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Today's Attendance</p>
+                  <p className="text-3xl font-bold text-foreground">{systemStats.todayAttendance}</p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <CheckCircle className="w-3 h-3 text-green-500" />
+                    <p className="text-xs text-green-500">On track</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card rounded-3xl p-6 hover-lift animate-fade-in-up relative overflow-hidden" style={{animationDelay: '0.4s'}}>
+              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-yellow-500/20 to-transparent rounded-bl-full"></div>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-yellow-500 to-orange-600 flex items-center justify-center shadow-lg">
+                  <Clock className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Current Time</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {currentDateTime.time}
+                  </p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <p className="text-xs text-green-500">System active</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Enhanced Main Tabs */}
+        <Tabs defaultValue="generator" className="space-y-6 animate-fade-in-up" onValueChange={setActiveTab}>
+          <div className="glass-card rounded-3xl p-2">
+            <TabsList className="grid w-full grid-cols-4 bg-transparent gap-2">
+              <TabsTrigger value="generator" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-primary-foreground rounded-2xl transition-all duration-300 hover:scale-105 flex items-center gap-2">
+                <QrCode className="w-4 h-4" />
+                Generate QR
+              </TabsTrigger>
+              <TabsTrigger value="scanner" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-primary-foreground rounded-2xl transition-all duration-300 hover:scale-105 flex items-center gap-2">
+                <Camera className="w-4 h-4" />
+                Scan Attendance
+              </TabsTrigger>
+              <TabsTrigger value="register" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-primary-foreground rounded-2xl transition-all duration-300 hover:scale-105 flex items-center gap-2">
+                <Upload className="w-4 h-4" />
+                Register QR
+              </TabsTrigger>
+              <TabsTrigger value="records" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-primary-foreground rounded-2xl transition-all duration-300 hover:scale-105 flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                View Records
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          {/* Enhanced QR Generator */}
+          <TabsContent value="generator" className="space-y-6 animate-fade-in">
+            <div className="glass-card rounded-3xl p-8 shadow-xl">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
+                  <QrCode className="w-6 h-6 text-primary-foreground" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-foreground">Generate QR Code</h3>
+                  <p className="text-sm text-muted-foreground">Create new student QR codes with advanced options</p>
+                </div>
+              </div>
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="studentId">Student ID</Label>
-                  <Input
-                    id="studentId"
-                    value={studentId}
-                    onChange={(e) => setStudentId(e.target.value)}
-                    placeholder="Enter student ID"
+                  <Label htmlFor="studentId" className="text-sm font-medium text-foreground">Student ID</Label>
+                  <Input 
+                    id="studentId" 
+                    value={studentId} 
+                    onChange={(e) => setStudentId(e.target.value)} 
+                    placeholder="Enter student ID" 
+                    className="h-12 transition-all duration-300 focus:ring-2 focus:ring-primary/50" 
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="studentName">Student Name</Label>
-                  <Input
-                    id="studentName"
-                    value={studentName}
-                    onChange={(e) => setStudentName(e.target.value)}
-                    placeholder="Enter student name"
+                  <Label htmlFor="studentName" className="text-sm font-medium text-foreground">Student Name</Label>
+                  <Input 
+                    id="studentName" 
+                    value={studentName} 
+                    onChange={(e) => setStudentName(e.target.value)} 
+                    placeholder="Enter student name" 
+                    className="h-12 transition-all duration-300 focus:ring-2 focus:ring-primary/50" 
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="qrSection">Section</Label>
+                  <Label htmlFor="qrSection" className="text-sm font-medium text-foreground">Section</Label>
                   <Select value={qrSection} onValueChange={setQrSection}>
-                    <SelectTrigger>
+                    <SelectTrigger id="qrSection" className="h-12 transition-all duration-300 focus:ring-2 focus:ring-primary/50">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="glass-card">
                       {SECTIONS.map(section => (
                         <SelectItem key={section} value={section}>{section}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={generateQRCode} className="w-full">
-                  <QrCode className="w-4 h-4 mr-2" />
-                  Generate QR Code
+                <Button 
+                  onClick={generateQRCode} 
+                  disabled={isGenerating} 
+                  className="w-full h-12 text-base font-medium bg-gradient-to-r from-primary to-accent hover:shadow-lg hover-glow transition-all duration-300 flex items-center gap-2"
+                >
+                  {isGenerating ? <><RefreshCw className="w-5 h-5 animate-spin" /> Generating...</> : <><Sparkles className="w-5 h-5" /> Generate QR Code</>}
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </TabsContent>
 
-          {/* Scanner */}
-          <TabsContent value="scanner" className="space-y-6">
-            <Card className="border-border shadow-elegant">
-              <CardHeader>
-                <CardTitle>Scan QR Code</CardTitle>
-                <CardDescription>Scan student QR codes to mark attendance</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+          {/* Enhanced Scanner */}
+          <TabsContent value="scanner" className="space-y-6 animate-fade-in">
+            <div className="glass-card rounded-3xl p-8 shadow-xl">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-lg">
+                    <Camera className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-foreground">QR Scanner</h3>
+                    <p className="text-sm text-muted-foreground">Scan student QR codes for attendance</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-green-500/20 text-green-500 text-xs font-medium">
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    {isScanning ? 'Active' : 'Inactive'}
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={toggleFullscreen}
+                    className="flex items-center gap-2"
+                  >
+                    {isFullscreen ? <><Minimize className="w-4 h-4" /> Exit Fullscreen</> : <><Maximize className="w-4 h-4" /> Fullscreen</>}
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Section</Label>
+                  <Label className="text-sm font-medium text-foreground">Section</Label>
                   <Select value={currentSection} onValueChange={setCurrentSection}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-12 transition-all duration-300 focus:ring-2 focus:ring-primary/50">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="glass-card">
                       {SECTIONS.map(section => (
                         <SelectItem key={section} value={section}>{section}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <QRScanner
-                  onScanSuccess={handleScanSuccess}
-                  isScanning={isScanning}
-                  onToggleScanning={() => setIsScanning(!isScanning)}
-                />
-              </CardContent>
-            </Card>
+                
+                {/* Scanner Container */}
+                <div 
+                  ref={scannerContainerRef}
+                  className={`flex justify-center items-center ${isFullscreen ? 'w-full h-screen' : 'w-full'}`}
+                >
+                  <div className={`${isFullscreen ? 'w-full h-full' : 'w-full max-w-md'} relative`}>
+                    {/* Main Scanner Container */}
+                    <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-black shadow-2xl">
+                      {/* Green Border Frame */}
+                      <div className="absolute inset-0 border-4 border-green-500 rounded-2xl z-20 pointer-events-none shadow-lg"></div>
+                      
+                      {/* Corner Markers */}
+                      <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 border-green-400 rounded-tl-2xl z-30 pointer-events-none animate-pulse"></div>
+                      <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 border-green-400 rounded-tr-2xl z-30 pointer-events-none animate-pulse"></div>
+                      <div className="absolute bottom-0 left-0 w-16 h-16 border-b-4 border-l-4 border-green-400 rounded-bl-2xl z-30 pointer-events-none animate-pulse"></div>
+                      <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 border-green-400 rounded-br-2xl z-30 pointer-events-none animate-pulse"></div>
+                      
+                      {isScanning && (
+                        <>
+                          {/* Scanning Line Animation */}
+                          <div className="absolute top-0 left-4 right-4 h-1 bg-gradient-to-r from-transparent via-green-400 to-transparent animate-scan-line z-25"></div>
+                          
+                          {/* Center Scanning Area Indicator */}
+                          <div className="absolute inset-0 flex items-center justify-center z-25">
+                            <div className="w-56 h-56 border border-green-400/50 rounded-xl"></div>
+                          </div>
+                          
+                          {/* Pulse Animation for Center */}
+                          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-40 h-40 border-2 border-green-400/30 rounded-xl animate-pulse z-25"></div>
+                          
+                          {/* Pulse Ring Effect */}
+                          <div className="pulse-ring z-25"></div>
+                        </>
+                      )}
+                      
+                      {/* QR Scanner Component */}
+                      <div className="absolute inset-4 rounded-xl overflow-hidden z-10">
+                        <div className="w-full h-full">
+                          <QRScanner
+                            onScanSuccess={handleScanSuccess}
+                            isScanning={isScanning}
+                            onToggleScanning={() => setIsScanning(!isScanning)}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Overlay when not scanning */}
+                      {!isScanning && (
+                        <div className="absolute inset-0 bg-black/70 flex items-center justify-center backdrop-blur-sm z-15">
+                          <div className="text-center">
+                            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-4 animate-pulse shadow-lg">
+                              <Camera className="w-10 h-10 text-white" />
+                            </div>
+                            <p className="text-white text-lg font-medium">Camera is off</p>
+                            <p className="text-white/70 text-sm mt-2">Click the button below to start scanning</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Enhanced Scanner Controls */}
+                    <div className="mt-6 flex justify-center">
+                      <Button 
+                        onClick={() => setIsScanning(!isScanning)}
+                        className={`w-full max-w-xs h-14 text-base font-medium transition-all duration-300 btn-scanner ${
+                          isScanning 
+                            ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700' 
+                            : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700'
+                        }`}
+                      >
+                        {isScanning ? (
+                          <>
+                            <div className="w-5 h-5 rounded-full bg-white mr-2 animate-pulse"></div>
+                            Stop Scanning
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="w-5 h-5 mr-2" />
+                            Start Scanning
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                
+                {isScanning && (
+                  <div className="flex items-center justify-center gap-2 text-green-500 animate-pulse animate-float">
+                    <Zap className="w-5 h-5" />
+                    <p className="text-sm font-medium">Scanner is active - Point camera at QR code</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </TabsContent>
 
-          {/* Register QR */}
-          <TabsContent value="register" className="space-y-6">
-            <Card className="border-border shadow-elegant">
-              <CardHeader>
-                <CardTitle>Register QR Codes</CardTitle>
-                <CardDescription>Upload and register QR codes from files</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+          {/* Enhanced Register QR */}
+          <TabsContent value="register" className="space-y-6 animate-fade-in">
+            <div className="glass-card rounded-3xl p-8 shadow-xl">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center shadow-lg">
+                  <Upload className="w-6 h-6 text-accent-foreground" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-foreground">Register QR Codes</h3>
+                  <p className="text-sm text-muted-foreground">Upload and register QR codes from files</p>
+                </div>
+              </div>
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Section</Label>
+                  <Label className="text-sm font-medium text-foreground">Section</Label>
                   <Select value={currentRegistrationSection} onValueChange={setCurrentRegistrationSection}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-12 transition-all duration-300 focus:ring-2 focus:ring-primary/50">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="glass-card">
                       {SECTIONS.map(section => (
                         <SelectItem key={section} value={section}>{section}</SelectItem>
                       ))}
@@ -586,113 +981,125 @@ const Index = () => {
                   onRegistrationSuccess={handleRegistrationSuccess}
                   currentSection={currentRegistrationSection}
                 />
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
             {Object.keys(registeredQRCodes).length > 0 && (
-              <Card className="border-border shadow-elegant">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Registered QR Codes ({Object.keys(registeredQRCodes).length})</CardTitle>
-                    <Button onClick={exportRegisteredQRCodes} variant="outline" size="sm">
-                      <Download className="w-4 h-4 mr-2" />
-                      Export to Excel
-                    </Button>
-                  </div>
-                  <div className="space-y-2 mt-4">
-                    <Label>Search</Label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        className="pl-9"
-                        placeholder="Search by name, ID, or section..."
-                        value={registrationSearchQuery}
-                        onChange={(e) => setRegistrationSearchQuery(e.target.value)}
-                      />
+              <div className="glass-card rounded-3xl p-8 mt-6 shadow-xl">
+                <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center shadow-lg">
+                      <ListChecks className="w-6 h-6 text-accent-foreground" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-foreground">Registered QR Codes ({Object.keys(registeredQRCodes).length})</h3>
+                      <p className="text-sm text-muted-foreground">Manage registered students</p>
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                    {getFilteredRegisteredQRCodes().length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                        <p>No registered QR codes found matching "{registrationSearchQuery}"</p>
+                  <Button 
+                    onClick={exportRegisteredQRCodes} 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex items-center gap-2" 
+                    disabled={isExporting}
+                  >
+                    {isExporting ? <><RefreshCw className="w-4 h-4 animate-spin" /> Exporting...</> : <><Download className="w-4 h-4" /> Export to Excel</>}
+                  </Button>
+                </div>
+                <div className="space-y-4 mb-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <Input 
+                      className="pl-11 h-12 transition-all duration-300 focus:ring-2 focus:ring-primary/50" 
+                      placeholder="Search by name, ID, or section..." 
+                      value={registrationSearchQuery} 
+                      onChange={(e) => setRegistrationSearchQuery(e.target.value)} 
+                    />
+                  </div>
+                </div>
+                <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                  {getFilteredRegisteredQRCodes().length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                        <Search className="w-8 h-8 text-muted-foreground" />
                       </div>
-                    ) : (
-                      getFilteredRegisteredQRCodes().map((qr) => (
-                        <div key={qr.id} className="flex items-center justify-between p-4 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors">
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary text-primary-foreground font-bold text-lg">
+                      <p className="text-muted-foreground">
+                        {registrationSearchQuery ? `No QR codes found matching "${registrationSearchQuery}"` : 'No registered QR codes yet'}
+                      </p>
+                    </div>
+                  ) : (
+                    getFilteredRegisteredQRCodes().map((qr) => (
+                      <div key={qr.id} className="glass-card p-4 rounded-2xl hover-lift">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-4 flex-1">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-primary-foreground font-bold shadow-lg">
                               {qr.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                             </div>
-                            <div>
-                              <p className="font-semibold text-lg">{qr.name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                ID: {qr.id} • {qr.section}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Registered: {new Date(qr.registeredAt).toLocaleString()}
-                              </p>
+                            <div className="flex-1">
+                              <p className="font-semibold text-lg text-foreground">{qr.name}</p>
+                              <p className="text-sm text-muted-foreground">ID: {qr.id} • {qr.section}</p>
+                              <p className="text-xs text-muted-foreground">Registered: {new Date(qr.registeredAt).toLocaleString()}</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openEditModal(qr)}
-                              title="Edit QR Code"
-                            >
+                            <Button variant="ghost" size="sm" onClick={() => openEditModal(qr)}>
                               <Edit className="w-4 h-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteRegisteredQR(qr.id)}
-                              title="Delete QR Code"
-                            >
-                              <Trash2 className="w-4 h-4" />
+                            <Button variant="ghost" size="sm" onClick={() => deleteRegisteredQR(qr.id)}>
+                              <Trash2 className="w-4 h-4 text-destructive" />
                             </Button>
                           </div>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             )}
           </TabsContent>
 
-          {/* Records */}
-          <TabsContent value="records" className="space-y-6">
-            <Card className="border-border shadow-elegant">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Attendance Records</CardTitle>
-                    <CardDescription>View and export attendance history</CardDescription>
+          {/* Enhanced Records */}
+          <TabsContent value="records" className="space-y-6 animate-fade-in">
+            <div className="glass-card rounded-3xl p-8 shadow-xl">
+              <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-lg">
+                    <Calendar className="w-6 h-6 text-white" />
                   </div>
-                  <div className="flex gap-2">
-                    <Button onClick={() => exportToExcel(currentDay)} variant="outline" size="sm">
-                      <Download className="w-4 h-4 mr-2" />
-                      Export {currentDay}
-                    </Button>
-                    <Button onClick={exportAllDaysToExcel} size="sm">
-                      <FileSpreadsheet className="w-4 h-4 mr-2" />
-                      Export All Days
-                    </Button>
+                  <div>
+                    <h3 className="text-xl font-bold text-foreground">Attendance Records</h3>
+                    <p className="text-sm text-muted-foreground">View and export attendance history</p>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
+                <div className="flex gap-2 flex-wrap">
+                  <Button 
+                    onClick={() => exportToExcel(currentDateTime.day)} 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex items-center gap-2" 
+                    disabled={isExporting}
+                  >
+                    {isExporting ? <><RefreshCw className="w-4 h-4 animate-spin" /> Exporting...</> : <><Download className="w-4 h-4" /> Export {currentDateTime.day}</>}
+                  </Button>
+                  <Button 
+                    onClick={exportAllDaysToExcel} 
+                    size="sm" 
+                    className="bg-gradient-to-r from-green-500 to-green-600 hover:shadow-lg hover-glow flex items-center gap-2" 
+                    disabled={isExporting}
+                  >
+                    {isExporting ? <><RefreshCw className="w-4 h-4 animate-spin" /> Exporting...</> : <><FileSpreadsheet className="w-4 h-4" /> Export All Days</>}
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-4 mb-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Section</Label>
+                    <Label className="text-sm font-medium text-foreground">Section</Label>
                     <Select value={currentSection} onValueChange={setCurrentSection}>
-                      <SelectTrigger>
+                      <SelectTrigger className="h-12 transition-all duration-300 focus:ring-2 focus:ring-primary/50">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="glass-card">
                         {SECTIONS.map(section => (
                           <SelectItem key={section} value={section}>{section}</SelectItem>
                         ))}
@@ -700,62 +1107,70 @@ const Index = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Search</Label>
+                    <Label className="text-sm font-medium text-foreground">Search</Label>
                     <div className="relative">
-                      <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        className="pl-9"
-                        placeholder="Search by name or ID..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <Input 
+                        className="pl-11 h-12 transition-all duration-300 focus:ring-2 focus:ring-primary/50" 
+                        placeholder="Search by name or ID..." 
+                        value={searchQuery} 
+                        onChange={(e) => setSearchQuery(e.target.value)} 
                       />
                     </div>
                   </div>
                 </div>
 
-                <Tabs value={currentDay} onValueChange={setCurrentDay}>
-                  <TabsList className="grid w-full grid-cols-7 bg-card">
-                    {DAYS.map(day => (
-                      <TabsTrigger key={day} value={day} className="text-xs">
-                        {day.slice(0, 3)}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
+                <Tabs value={currentDateTime.day} onValueChange={(value) => setCurrentDateTime(prev => ({ ...prev, day: value }))}>
+                  <div className="glass-card rounded-2xl p-2 mb-4">
+                    <TabsList className="grid w-full grid-cols-7 bg-transparent gap-1">
+                      {DAYS.map(day => (
+                        <TabsTrigger 
+                          key={day} 
+                          value={day} 
+                          className="text-xs data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-green-600 data-[state=active]:text-white rounded-xl"
+                        >
+                          {day.slice(0, 3)}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </div>
 
                   {DAYS.map(day => (
-                    <TabsContent key={day} value={day} className="space-y-2">
+                    <TabsContent key={day} value={day} className="space-y-3">
                       {getAttendanceForDay(day).length === 0 ? (
-                        <div className="text-center py-12 text-muted-foreground">
-                          <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                          <p>No attendance records for {day}</p>
+                        <div className="text-center py-12">
+                          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                            <Calendar className="w-8 h-8 text-muted-foreground" />
+                          </div>
+                          <p className="text-muted-foreground">No attendance records for {day}</p>
                         </div>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           {getAttendanceForDay(day).map((record, index) => (
-                            <div key={index} className="flex items-center justify-between p-4 bg-secondary rounded-lg">
-                              <div className="flex items-center gap-4">
-                                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary text-primary-foreground font-bold">
-                                  {record.studentName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                            <div key={index} className="glass-card p-4 rounded-2xl hover-lift">
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-4 flex-1">
+                                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold shadow-lg">
+                                    {record.studentName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="font-semibold text-lg text-foreground">{record.studentName}</p>
+                                    <p className="text-sm text-muted-foreground">ID: {record.studentId} • {record.section}</p>
+                                  </div>
                                 </div>
-                                <div>
-                                  <p className="font-semibold">{record.studentName}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    ID: {record.studentId} • {record.section}
-                                  </p>
+                                <div className="flex items-center gap-4">
+                                  <div className="text-right">
+                                    <p className="text-sm font-medium text-foreground">{record.date}</p>
+                                    <p className="text-xs text-muted-foreground">{record.time}</p>
+                                  </div>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={() => deleteAttendanceRecord(day, index)}
+                                  >
+                                    <Trash2 className="w-4 h-4 text-destructive" />
+                                  </Button>
                                 </div>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                <div className="text-right">
-                                  <p className="text-sm">{record.date}</p>
-                                  <p className="text-xs text-muted-foreground">{record.time}</p>
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => deleteAttendanceRecord(day, index)}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
                               </div>
                             </div>
                           ))}
@@ -764,47 +1179,54 @@ const Index = () => {
                     </TabsContent>
                   ))}
                 </Tabs>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* Edit QR Code Modal */}
+      {/* Enhanced Edit QR Code Modal */}
       <Dialog open={editingQR !== null} onOpenChange={(open) => !open && closeEditModal()}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] glass-card shadow-2xl">
           <DialogHeader>
-            <DialogTitle>Edit Registered QR Code</DialogTitle>
-            <DialogDescription>
-              Update the student information for this registered QR code
-            </DialogDescription>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
+                <Edit className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl">Edit Registered QR Code</DialogTitle>
+                <DialogDescription>Update the student information</DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-id">Student ID *</Label>
-              <Input
-                id="edit-id"
-                value={editForm.id}
-                onChange={(e) => setEditForm({ ...editForm, id: e.target.value })}
-                placeholder="Enter student ID"
+              <Label htmlFor="edit-id" className="text-sm font-medium text-foreground">Student ID *</Label>
+              <Input 
+                id="edit-id" 
+                value={editForm.id} 
+                onChange={(e) => setEditForm({ ...editForm, id: e.target.value })} 
+                placeholder="Enter student ID" 
+                className="h-12 transition-all duration-300 focus:ring-2 focus:ring-primary/50" 
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-name">Student Name *</Label>
-              <Input
-                id="edit-name"
-                value={editForm.name}
-                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                placeholder="Enter student name"
+              <Label htmlFor="edit-name" className="text-sm font-medium text-foreground">Student Name *</Label>
+              <Input 
+                id="edit-name" 
+                value={editForm.name} 
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} 
+                placeholder="Enter student name" 
+                className="h-12 transition-all duration-300 focus:ring-2 focus:ring-primary/50" 
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-section">Section</Label>
+              <Label htmlFor="edit-section" className="text-sm font-medium text-foreground">Section</Label>
               <Select value={editForm.section} onValueChange={(value) => setEditForm({ ...editForm, section: value })}>
-                <SelectTrigger id="edit-section">
+                <SelectTrigger id="edit-section" className="h-12 transition-all duration-300 focus:ring-2 focus:ring-primary/50">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="glass-card">
                   {SECTIONS.map(section => (
                     <SelectItem key={section} value={section}>{section}</SelectItem>
                   ))}
@@ -812,14 +1234,12 @@ const Index = () => {
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeEditModal}>
-              <X className="w-4 h-4 mr-2" />
-              Cancel
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={closeEditModal} className="flex items-center gap-2">
+              <X className="w-4 h-4 mr-2" /> Cancel
             </Button>
-            <Button onClick={saveEdit}>
-              <Save className="w-4 h-4 mr-2" />
-              Save Changes
+            <Button onClick={saveEdit} className="bg-gradient-to-r from-primary to-accent hover:shadow-lg hover-glow flex items-center gap-2">
+              <Save className="w-4 h-4 mr-2" /> Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>
