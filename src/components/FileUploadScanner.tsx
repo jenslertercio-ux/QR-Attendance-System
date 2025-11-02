@@ -94,9 +94,9 @@ export function FileUploadScanner({ onRegistrationSuccess, currentSection }: Fil
   };
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary transition-colors">
+    <div className="space-y-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="glass-card border-2 border-dashed border-primary/30 rounded-2xl p-10 text-center hover:border-primary/60 hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500 shimmer hover:scale-105 cursor-pointer">
           <input
             ref={fileInputRef}
             type="file"
@@ -105,18 +105,25 @@ export function FileUploadScanner({ onRegistrationSuccess, currentSection }: Fil
             className="hidden"
             onChange={handleFileSelect}
           />
-          <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-          <h3 className="font-semibold mb-2">Upload QR Code Images</h3>
-          <p className="text-sm text-muted-foreground mb-4">
+          <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg animate-float">
+            <Upload className="w-8 h-8 text-primary-foreground" />
+          </div>
+          <h3 className="text-lg font-bold mb-2 gradient-text">Upload QR Code Images</h3>
+          <p className="text-sm text-muted-foreground mb-6">
             Select multiple image files containing QR codes
           </p>
-          <Button onClick={() => fileInputRef.current?.click()} disabled={isProcessing}>
+          <Button 
+            onClick={() => fileInputRef.current?.click()} 
+            disabled={isProcessing}
+            size="lg"
+            className="bg-gradient-to-r from-primary to-secondary hover:shadow-xl hover:shadow-primary/30 transition-all hover:scale-105"
+          >
             <Upload className="w-4 h-4 mr-2" />
             Browse Files
           </Button>
         </div>
 
-        <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary transition-colors">
+        <div className="glass-card border-2 border-dashed border-accent/30 rounded-2xl p-10 text-center hover:border-accent/60 hover:shadow-2xl hover:shadow-accent/20 transition-all duration-500 shimmer hover:scale-105 cursor-pointer">
           <input
             ref={folderInputRef}
             type="file"
@@ -125,12 +132,19 @@ export function FileUploadScanner({ onRegistrationSuccess, currentSection }: Fil
             className="hidden"
             onChange={handleFileSelect}
           />
-          <Folder className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-          <h3 className="font-semibold mb-2">Upload Folder</h3>
-          <p className="text-sm text-muted-foreground mb-4">
+          <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-accent to-secondary flex items-center justify-center shadow-lg animate-float" style={{animationDelay: '0.5s'}}>
+            <Folder className="w-8 h-8 text-accent-foreground" />
+          </div>
+          <h3 className="text-lg font-bold mb-2 gradient-text">Upload Folder</h3>
+          <p className="text-sm text-muted-foreground mb-6">
             Select a folder containing QR code images
           </p>
-          <Button onClick={() => folderInputRef.current?.click()} disabled={isProcessing}>
+          <Button 
+            onClick={() => folderInputRef.current?.click()} 
+            disabled={isProcessing}
+            size="lg"
+            className="bg-gradient-to-r from-accent to-secondary hover:shadow-xl hover:shadow-accent/30 transition-all hover:scale-105"
+          >
             <Folder className="w-4 h-4 mr-2" />
             Select Folder
           </Button>
@@ -138,45 +152,51 @@ export function FileUploadScanner({ onRegistrationSuccess, currentSection }: Fil
       </div>
 
       {isProcessing && (
-        <div className="bg-card border border-border rounded-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="font-semibold">Processing QR Codes</h4>
-            <span className="text-sm text-muted-foreground">
+        <div className="glass-card rounded-2xl p-8 border-2 border-primary/30 shadow-xl shadow-primary/10 animate-fade-in-up">
+          <div className="flex items-center justify-between mb-6">
+            <h4 className="text-lg font-bold gradient-text">Processing QR Codes</h4>
+            <span className="text-sm font-semibold px-4 py-2 rounded-full bg-primary/20 text-primary">
               {progress.current} / {progress.total}
             </span>
           </div>
-          <div className="w-full bg-secondary rounded-full h-2">
+          <div className="w-full bg-secondary/30 rounded-full h-3 overflow-hidden shadow-inner">
             <div 
-              className="bg-primary h-2 rounded-full transition-all duration-300"
+              className="bg-gradient-to-r from-primary via-secondary to-accent h-3 rounded-full transition-all duration-500 shadow-lg"
               style={{ width: `${(progress.current / progress.total) * 100}%` }}
             />
           </div>
-          <div className="flex items-center justify-center mt-4">
-            <Loader2 className="w-5 h-5 animate-spin mr-2" />
-            <span className="text-sm text-muted-foreground">Processing images...</span>
+          <div className="flex items-center justify-center mt-6 gap-3">
+            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            <span className="text-sm font-medium text-foreground">Processing images...</span>
           </div>
         </div>
       )}
 
       {uploadResults.length > 0 && !isProcessing && (
-        <div className="bg-card border border-border rounded-lg p-6">
-          <h4 className="font-semibold mb-4">Upload Results</h4>
-          <div className="space-y-2 max-h-96 overflow-y-auto">
+        <div className="glass-card rounded-2xl p-8 border-2 border-primary/20 shadow-xl animate-scale-in">
+          <h4 className="text-lg font-bold mb-6 gradient-text">Upload Results</h4>
+          <div className="space-y-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
             {uploadResults.map((result, index) => (
               <div 
                 key={index}
-                className={`flex items-start gap-3 p-3 rounded-lg ${
-                  result.success ? 'bg-accent/10' : 'bg-destructive/10'
+                className={`flex items-start gap-4 p-4 rounded-xl transition-all duration-300 hover:scale-102 ${
+                  result.success 
+                    ? 'bg-gradient-to-r from-green-500/10 to-green-500/5 border border-green-500/30 hover:border-green-500/50' 
+                    : 'bg-gradient-to-r from-destructive/10 to-destructive/5 border border-destructive/30 hover:border-destructive/50'
                 }`}
               >
                 {result.success ? (
-                  <CheckCircle className="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center flex-shrink-0 shadow-lg">
+                    <CheckCircle className="w-5 h-5 text-white" />
+                  </div>
                 ) : (
-                  <XCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-destructive to-destructive/80 flex items-center justify-center flex-shrink-0 shadow-lg">
+                    <XCircle className="w-5 h-5 text-white" />
+                  </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{result.fileName}</p>
-                  <p className="text-xs text-muted-foreground">{result.message}</p>
+                  <p className="text-sm font-semibold truncate text-foreground">{result.fileName}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{result.message}</p>
                 </div>
               </div>
             ))}
