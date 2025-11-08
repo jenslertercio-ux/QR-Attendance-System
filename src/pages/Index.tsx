@@ -21,6 +21,9 @@ import {
 } from 'lucide-react';
 import QRCodeLib from 'qrcode';
 import * as XLSX from 'xlsx';
+import { triggerSuccessConfetti, triggerCelebrationConfetti } from '@/lib/confetti';
+import { AttendanceListSkeleton, QRCodesSkeleton } from '@/components/SkeletonLoader';
+import { EmptyState, EmptyAttendanceState, EmptyQRCodesState, EmptySearchState } from '@/components/EmptyState';
 
 // Types for better type safety
 interface AttendanceRecord {
@@ -104,6 +107,7 @@ const Index = () => {
   const [showStats, setShowStats] = useState(true);
   const [activeTab, setActiveTab] = useState('generator');
   const [darkMode, setDarkMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
   // QR Generator state
   const [studentId, setStudentId] = useState('');
@@ -281,6 +285,11 @@ const Index = () => {
     setShowSuccessAnimation(true);
     setTimeout(() => setShowSuccessAnimation(false), 3000);
     
+    // Trigger confetti celebration
+    if (success) {
+      triggerSuccessConfetti();
+    }
+    
     // Show appropriate toast message
     if (success) {
       toast.success(`✓ Attendance marked for ${studentData.name}!`, {
@@ -340,6 +349,8 @@ const Index = () => {
       link.href = canvas.toDataURL();
       link.click();
 
+      // Trigger celebration
+      triggerCelebrationConfetti();
       toast.success('QR code generated successfully!');
       setStudentId('');
       setStudentName('');
@@ -984,7 +995,9 @@ const Index = () => {
               </div>
             </div>
 
-            {Object.keys(registeredQRCodes).length > 0 && (
+            {Object.keys(registeredQRCodes).length === 0 ? (
+              <EmptyQRCodesState onAction={() => {}} />
+            ) : (
               <div className="glass-card rounded-3xl p-8 mt-6 shadow-xl">
                 <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
                   <div className="flex items-center gap-3">
@@ -1019,20 +1032,17 @@ const Index = () => {
                 </div>
                 <div className="space-y-3 max-h-[500px] overflow-y-auto">
                   {getFilteredRegisteredQRCodes().length === 0 ? (
-                    <div className="text-center py-12">
-                      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                        <Search className="w-8 h-8 text-muted-foreground" />
-                      </div>
-                      <p className="text-muted-foreground">
-                        {registrationSearchQuery ? `No QR codes found matching "${registrationSearchQuery}"` : 'No registered QR codes yet'}
-                      </p>
-                    </div>
+                    registrationSearchQuery ? (
+                      <EmptySearchState />
+                    ) : (
+                      <EmptyQRCodesState onAction={() => setActiveTab('register')} />
+                    )
                   ) : (
                     getFilteredRegisteredQRCodes().map((qr) => (
-                      <div key={qr.id} className="glass-card p-4 rounded-2xl hover-lift">
+                      <div key={qr.id} className="glass-card p-4 rounded-2xl hover-lift transition-all duration-300">
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-4 flex-1">
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-primary-foreground font-bold shadow-lg">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-primary-foreground font-bold shadow-lg animate-scale-in">
                               {qr.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                             </div>
                             <div className="flex-1">
@@ -1040,12 +1050,20 @@ const Index = () => {
                               <p className="text-sm text-muted-foreground">ID: {qr.id} • {qr.section}</p>
                               <p className="text-xs text-muted-foreground">Registered: {new Date(qr.registeredAt).toLocaleString()}</p>
                             </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button variant="ghost" size="sm" onClick={() => openEditModal(qr)}>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => openEditModal(qr)}
+                              className="hover:scale-110 transition-transform duration-200"
+                            >
                               <Edit className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => deleteRegisteredQR(qr.id)}>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => deleteRegisteredQR(qr.id)}
+                              className="hover:scale-110 transition-transform duration-200"
+                            >
                               <Trash2 className="w-4 h-4 text-destructive" />
                             </Button>
                           </div>
@@ -1138,19 +1156,18 @@ const Index = () => {
                   {DAYS.map(day => (
                     <TabsContent key={day} value={day} className="space-y-3">
                       {getAttendanceForDay(day).length === 0 ? (
-                        <div className="text-center py-12">
-                          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                            <Calendar className="w-8 h-8 text-muted-foreground" />
-                          </div>
-                          <p className="text-muted-foreground">No attendance records for {day}</p>
-                        </div>
+                        searchQuery ? (
+                          <EmptySearchState />
+                        ) : (
+                          <EmptyAttendanceState onAction={() => setActiveTab('scanner')} />
+                        )
                       ) : (
                         <div className="space-y-3">
                           {getAttendanceForDay(day).map((record, index) => (
-                            <div key={index} className="glass-card p-4 rounded-2xl hover-lift">
+                            <div key={index} className="glass-card p-4 rounded-2xl hover-lift transition-all duration-300 animate-fade-in" style={{ animationDelay: `${index * 0.05}s` }}>
                               <div className="flex items-center justify-between gap-4">
                                 <div className="flex items-center gap-4 flex-1">
-                                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold shadow-lg">
+                                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold shadow-lg animate-scale-in">
                                     {record.studentName.split(' ').map(n => n[0]).join('').toUpperCase()}
                                   </div>
                                   <div className="flex-1">
@@ -1167,6 +1184,7 @@ const Index = () => {
                                     variant="ghost" 
                                     size="sm" 
                                     onClick={() => deleteAttendanceRecord(day, index)}
+                                    className="hover:scale-110 transition-transform duration-200"
                                   >
                                     <Trash2 className="w-4 h-4 text-destructive" />
                                   </Button>
