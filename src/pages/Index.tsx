@@ -24,6 +24,7 @@ import * as XLSX from 'xlsx';
 import { triggerSuccessConfetti, triggerCelebrationConfetti } from '@/lib/confetti';
 import { AttendanceListSkeleton, QRCodesSkeleton } from '@/components/SkeletonLoader';
 import { EmptyState, EmptyAttendanceState, EmptyQRCodesState, EmptySearchState } from '@/components/EmptyState';
+import { Header } from '@/components/Header';
 
 // Types for better type safety
 interface AttendanceRecord {
@@ -586,7 +587,12 @@ const Index = () => {
   }, []);
 
   return (
-    <div className={`app-container ${darkMode ? 'dark' : ''}`}>
+    <div className="min-h-screen bg-background">
+      <Header 
+        userName="Admin User"
+        userEmail="admin@qrattendance.com"
+      />
+      
       {/* Animated background elements */}
       <div className="bg-animation">
         <div className="bg-blob bg-blob-1"></div>
@@ -594,21 +600,10 @@ const Index = () => {
         <div className="bg-blob bg-blob-3"></div>
       </div>
       
-      <div className="max-w-7xl mx-auto space-y-6 relative z-10">
-        {/* Enhanced Header with glassmorphic nav */}
-        <div className="glass-nav rounded-3xl p-6 mb-8">
+      <div className="max-w-7xl mx-auto space-y-6 relative z-10 p-6">
+        {/* Quick stats bar */}
+        <div className="glass-nav rounded-3xl p-4">
           <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg hover-glow animate-pulse-slow">
-                <QrCode className="w-7 h-7 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold gradient-text">
-                  QR Attendance System
-                </h1>
-                <p className="text-sm text-muted-foreground">Modern attendance tracking with advanced analytics</p>
-              </div>
-            </div>
             <div className="flex items-center gap-4">
               <div className="glass-card rounded-2xl px-4 py-2 hover-lift">
                 <p className="text-xs text-muted-foreground">Active Section</p>
@@ -617,25 +612,6 @@ const Index = () => {
               <div className="glass-card rounded-2xl px-4 py-2 hover-lift">
                 <p className="text-xs text-muted-foreground">Current Date</p>
                 <p className="text-lg font-bold text-foreground">{currentDateTime.date}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="rounded-full"
-                  onClick={() => setDarkMode(!darkMode)}
-                >
-                  {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                </Button>
-                <Button variant="ghost" size="sm" className="rounded-full">
-                  <Bell className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" className="rounded-full">
-                  <Settings className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" className="rounded-full">
-                  <HelpCircle className="w-4 h-4" />
-                </Button>
               </div>
             </div>
           </div>
