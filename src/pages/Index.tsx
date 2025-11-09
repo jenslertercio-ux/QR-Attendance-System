@@ -594,47 +594,47 @@ const Index = () => {
         <div className="bg-blob bg-blob-3"></div>
       </div>
       
-      <div className="max-w-7xl mx-auto space-y-6 relative z-10">
+      <div className="max-w-7xl mx-auto space-y-4 md:space-y-6 relative z-10 px-3 md:px-4">
         {/* Enhanced Header with glassmorphic nav */}
-        <div className="glass-nav rounded-3xl p-6 mb-8">
-          <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="glass-nav rounded-2xl md:rounded-3xl p-4 md:p-6 mb-4 md:mb-8">
+          <div className="flex flex-col gap-4">
+            {/* Logo and Title */}
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg hover-glow animate-pulse-slow">
-                <QrCode className="w-7 h-7 text-primary-foreground" />
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg hover-glow animate-pulse-slow">
+                <QrCode className="w-5 h-5 md:w-7 md:h-7 text-primary-foreground" />
               </div>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold gradient-text">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-lg md:text-2xl lg:text-3xl font-bold gradient-text truncate">
                   QR Attendance System
                 </h1>
-                <p className="text-sm text-muted-foreground">Modern attendance tracking with advanced analytics</p>
+                <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">Modern attendance tracking</p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="glass-card rounded-2xl px-4 py-2 hover-lift">
-                <p className="text-xs text-muted-foreground">Active Section</p>
-                <p className="text-lg font-bold gradient-text">{currentSection}</p>
+            
+            {/* Section and Date Info */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0">
+              <div className="glass-card rounded-xl px-3 py-2 hover-lift shrink-0">
+                <p className="text-xs text-muted-foreground">Section</p>
+                <p className="text-sm md:text-base font-bold gradient-text">{currentSection}</p>
               </div>
-              <div className="glass-card rounded-2xl px-4 py-2 hover-lift">
-                <p className="text-xs text-muted-foreground">Current Date</p>
-                <p className="text-lg font-bold text-foreground">{currentDateTime.date}</p>
+              <div className="glass-card rounded-xl px-3 py-2 hover-lift shrink-0">
+                <p className="text-xs text-muted-foreground">Date</p>
+                <p className="text-sm md:text-base font-bold text-foreground whitespace-nowrap">{currentDateTime.date}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 md:gap-2 ml-auto shrink-0">
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  className="rounded-full"
+                  className="rounded-full h-8 w-8 p-0"
                   onClick={() => setDarkMode(!darkMode)}
                 >
                   {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                 </Button>
-                <Button variant="ghost" size="sm" className="rounded-full">
+                <Button variant="ghost" size="sm" className="rounded-full h-8 w-8 p-0 hidden sm:flex">
                   <Bell className="w-4 h-4" />
                 </Button>
-                <Button variant="ghost" size="sm" className="rounded-full">
+                <Button variant="ghost" size="sm" className="rounded-full h-8 w-8 p-0 hidden md:flex">
                   <Settings className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" className="rounded-full">
-                  <HelpCircle className="w-4 h-4" />
                 </Button>
               </div>
             </div>
@@ -657,64 +657,64 @@ const Index = () => {
         )}
 
         {/* Enhanced Stats Cards with Toggle */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-foreground">Dashboard Overview</h2>
+        <div className="flex items-center justify-between mb-3 md:mb-4">
+          <h2 className="text-base md:text-xl font-semibold text-foreground">Dashboard Overview</h2>
           <Button 
             variant="ghost" 
             size="sm" 
             onClick={() => setShowStats(!showStats)}
-            className="flex items-center gap-2"
+            className="flex items-center gap-1 md:gap-2 text-xs md:text-sm h-8"
           >
-            {showStats ? <><ArrowUp className="w-4 h-4" /> Hide Stats</> : <><ArrowDown className="w-4 h-4" /> Show Stats</>}
+            {showStats ? <><ArrowUp className="w-3 h-3 md:w-4 md:h-4" /> <span className="hidden sm:inline">Hide</span></> : <><ArrowDown className="w-3 h-3 md:w-4 md:h-4" /> <span className="hidden sm:inline">Show</span></>}
           </Button>
         </div>
         
         {showStats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="glass-card rounded-3xl p-6 hover-lift animate-fade-in-up relative overflow-hidden" style={{animationDelay: '0.1s'}}>
-              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/20 to-transparent rounded-bl-full"></div>
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg">
-                  <Users className="w-7 h-7 text-primary-foreground" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4 mb-4 md:mb-6">
+            <div className="glass-card rounded-2xl md:rounded-3xl p-3 md:p-6 hover-lift animate-fade-in-up relative overflow-hidden" style={{animationDelay: '0.1s'}}>
+              <div className="absolute top-0 right-0 w-12 h-12 md:w-20 md:h-20 bg-gradient-to-br from-primary/20 to-transparent rounded-bl-full"></div>
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4">
+                <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg">
+                  <Users className="w-5 h-5 md:w-7 md:h-7 text-primary-foreground" />
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground font-medium">Total Students</p>
-                  <p className="text-3xl font-bold text-foreground">{systemStats.totalStudents}</p>
-                  <div className="flex items-center gap-1 mt-1">
+                <div className="min-w-0">
+                  <p className="text-xs md:text-sm text-muted-foreground font-medium">Total Students</p>
+                  <p className="text-xl md:text-3xl font-bold text-foreground">{systemStats.totalStudents}</p>
+                  <div className="flex items-center gap-1 mt-1 hidden md:flex">
                     <TrendingUp className="w-3 h-3 text-green-500" />
-                    <p className="text-xs text-green-500">+{systemStats.weeklyTrend}% from last week</p>
+                    <p className="text-xs text-green-500">+{systemStats.weeklyTrend}%</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="glass-card rounded-3xl p-6 hover-lift animate-fade-in-up relative overflow-hidden" style={{animationDelay: '0.2s'}}>
-              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-accent/20 to-transparent rounded-bl-full"></div>
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center shadow-lg">
-                  <QrCode className="w-7 h-7 text-accent-foreground" />
+            <div className="glass-card rounded-2xl md:rounded-3xl p-3 md:p-6 hover-lift animate-fade-in-up relative overflow-hidden" style={{animationDelay: '0.2s'}}>
+              <div className="absolute top-0 right-0 w-12 h-12 md:w-20 md:h-20 bg-gradient-to-br from-accent/20 to-transparent rounded-bl-full"></div>
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4">
+                <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center shadow-lg">
+                  <QrCode className="w-5 h-5 md:w-7 md:h-7 text-accent-foreground" />
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground font-medium">Registered QR</p>
-                  <p className="text-3xl font-bold text-foreground">{systemStats.registeredQR}</p>
-                  <div className="flex items-center gap-1 mt-1">
+                <div className="min-w-0">
+                  <p className="text-xs md:text-sm text-muted-foreground font-medium">Registered QR</p>
+                  <p className="text-xl md:text-3xl font-bold text-foreground">{systemStats.registeredQR}</p>
+                  <div className="flex items-center gap-1 mt-1 hidden md:flex">
                     <Activity className="w-3 h-3 text-blue-500" />
-                    <p className="text-xs text-blue-500">Active registrations</p>
+                    <p className="text-xs text-blue-500">Active</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="glass-card rounded-3xl p-6 hover-lift animate-fade-in-up relative overflow-hidden" style={{animationDelay: '0.3s'}}>
-              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-green-500/20 to-transparent rounded-bl-full"></div>
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-lg">
-                  <Calendar className="w-7 h-7 text-white" />
+            <div className="glass-card rounded-2xl md:rounded-3xl p-3 md:p-6 hover-lift animate-fade-in-up relative overflow-hidden" style={{animationDelay: '0.3s'}}>
+              <div className="absolute top-0 right-0 w-12 h-12 md:w-20 md:h-20 bg-gradient-to-br from-green-500/20 to-transparent rounded-bl-full"></div>
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4">
+                <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-lg">
+                  <Calendar className="w-5 h-5 md:w-7 md:h-7 text-white" />
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground font-medium">Today's Attendance</p>
-                  <p className="text-3xl font-bold text-foreground">{systemStats.todayAttendance}</p>
-                  <div className="flex items-center gap-1 mt-1">
+                <div className="min-w-0">
+                  <p className="text-xs md:text-sm text-muted-foreground font-medium">Today</p>
+                  <p className="text-xl md:text-3xl font-bold text-foreground">{systemStats.todayAttendance}</p>
+                  <div className="flex items-center gap-1 mt-1 hidden md:flex">
                     <CheckCircle className="w-3 h-3 text-green-500" />
                     <p className="text-xs text-green-500">On track</p>
                   </div>
@@ -722,20 +722,20 @@ const Index = () => {
               </div>
             </div>
 
-            <div className="glass-card rounded-3xl p-6 hover-lift animate-fade-in-up relative overflow-hidden" style={{animationDelay: '0.4s'}}>
-              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-yellow-500/20 to-transparent rounded-bl-full"></div>
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-yellow-500 to-orange-600 flex items-center justify-center shadow-lg">
-                  <Clock className="w-7 h-7 text-white" />
+            <div className="glass-card rounded-2xl md:rounded-3xl p-3 md:p-6 hover-lift animate-fade-in-up relative overflow-hidden" style={{animationDelay: '0.4s'}}>
+              <div className="absolute top-0 right-0 w-12 h-12 md:w-20 md:h-20 bg-gradient-to-br from-yellow-500/20 to-transparent rounded-bl-full"></div>
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4">
+                <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-gradient-to-br from-yellow-500 to-orange-600 flex items-center justify-center shadow-lg">
+                  <Clock className="w-5 h-5 md:w-7 md:h-7 text-white" />
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground font-medium">Current Time</p>
-                  <p className="text-2xl font-bold text-foreground">
+                <div className="min-w-0">
+                  <p className="text-xs md:text-sm text-muted-foreground font-medium">Time</p>
+                  <p className="text-lg md:text-2xl font-bold text-foreground">
                     {currentDateTime.time}
                   </p>
-                  <div className="flex items-center gap-1 mt-1">
+                  <div className="flex items-center gap-1 mt-1 hidden md:flex">
                     <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                    <p className="text-xs text-green-500">System active</p>
+                    <p className="text-xs text-green-500">Active</p>
                   </div>
                 </div>
               </div>
@@ -744,38 +744,42 @@ const Index = () => {
         )}
 
         {/* Enhanced Main Tabs */}
-        <Tabs defaultValue="generator" className="space-y-6 animate-fade-in-up" onValueChange={setActiveTab}>
-          <div className="glass-card rounded-3xl p-2">
-            <TabsList className="grid w-full grid-cols-4 bg-transparent gap-2">
-              <TabsTrigger value="generator" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-primary-foreground rounded-2xl transition-all duration-300 hover:scale-105 flex items-center gap-2">
-                <QrCode className="w-4 h-4" />
-                Generate QR
+        <Tabs defaultValue="generator" className="space-y-4 md:space-y-6 animate-fade-in-up" onValueChange={setActiveTab}>
+          <div className="glass-card rounded-2xl md:rounded-3xl p-1 md:p-2 overflow-x-auto">
+            <TabsList className="grid w-full grid-cols-4 bg-transparent gap-1 md:gap-2 min-w-max md:min-w-0">
+              <TabsTrigger value="generator" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-primary-foreground rounded-xl md:rounded-2xl transition-all duration-300 hover:scale-105 flex items-center gap-1 md:gap-2 text-xs md:text-sm px-2 md:px-3 py-2">
+                <QrCode className="w-3 h-3 md:w-4 md:h-4" />
+                <span className="hidden sm:inline">Generate</span>
+                <span className="sm:hidden">QR</span>
               </TabsTrigger>
-              <TabsTrigger value="scanner" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-primary-foreground rounded-2xl transition-all duration-300 hover:scale-105 flex items-center gap-2">
-                <Camera className="w-4 h-4" />
-                Scan Attendance
+              <TabsTrigger value="scanner" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-primary-foreground rounded-xl md:rounded-2xl transition-all duration-300 hover:scale-105 flex items-center gap-1 md:gap-2 text-xs md:text-sm px-2 md:px-3 py-2">
+                <Camera className="w-3 h-3 md:w-4 md:h-4" />
+                <span className="hidden sm:inline">Scan</span>
+                <span className="sm:hidden">Scan</span>
               </TabsTrigger>
-              <TabsTrigger value="register" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-primary-foreground rounded-2xl transition-all duration-300 hover:scale-105 flex items-center gap-2">
-                <Upload className="w-4 h-4" />
-                Register QR
+              <TabsTrigger value="register" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-primary-foreground rounded-xl md:rounded-2xl transition-all duration-300 hover:scale-105 flex items-center gap-1 md:gap-2 text-xs md:text-sm px-2 md:px-3 py-2">
+                <Upload className="w-3 h-3 md:w-4 md:h-4" />
+                <span className="hidden sm:inline">Register</span>
+                <span className="sm:hidden">Reg</span>
               </TabsTrigger>
-              <TabsTrigger value="records" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-primary-foreground rounded-2xl transition-all duration-300 hover:scale-105 flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                View Records
+              <TabsTrigger value="records" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-accent data-[state=active]:text-primary-foreground rounded-xl md:rounded-2xl transition-all duration-300 hover:scale-105 flex items-center gap-1 md:gap-2 text-xs md:text-sm px-2 md:px-3 py-2">
+                <FileText className="w-3 h-3 md:w-4 md:h-4" />
+                <span className="hidden sm:inline">Records</span>
+                <span className="sm:hidden">Rec</span>
               </TabsTrigger>
             </TabsList>
           </div>
 
           {/* Enhanced QR Generator */}
-          <TabsContent value="generator" className="space-y-6 animate-fade-in">
-            <div className="glass-card rounded-3xl p-8 shadow-xl">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
-                  <QrCode className="w-6 h-6 text-primary-foreground" />
+          <TabsContent value="generator" className="space-y-4 md:space-y-6 animate-fade-in">
+            <div className="glass-card rounded-2xl md:rounded-3xl p-4 md:p-8 shadow-xl">
+              <div className="flex items-center gap-3 mb-4 md:mb-6">
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
+                  <QrCode className="w-5 h-5 md:w-6 md:h-6 text-primary-foreground" />
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-foreground">Generate QR Code</h3>
-                  <p className="text-sm text-muted-foreground">Create new student QR codes with advanced options</p>
+                <div className="min-w-0">
+                  <h3 className="text-base md:text-xl font-bold text-foreground">Generate QR Code</h3>
+                  <p className="text-xs md:text-sm text-muted-foreground hidden sm:block">Create new student QR codes</p>
                 </div>
               </div>
               <div className="space-y-4">
